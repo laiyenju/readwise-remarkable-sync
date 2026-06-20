@@ -1,0 +1,31 @@
+name: Readwise → reMarkable Daily Sync
+
+on:
+  schedule:
+    # 每天 00:30 台灣時間（UTC+8）= UTC 16:30
+    - cron: '30 16 * * *'
+  workflow_dispatch:
+    # 允許手動從 GitHub 觸發（方便測試）
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run sync
+        env:
+          READWISE_TOKEN: ${{ secrets.READWISE_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GOOGLE_OAUTH_CREDENTIALS: ${{ secrets.GOOGLE_OAUTH_CREDENTIALS }}
+        run: python sync.py
