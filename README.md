@@ -240,48 +240,39 @@ Make sure your rM2 is connected to Wi-Fi. Google Drive sync requires an internet
 **Q: Articles only show the title, no content.**
 The article came from an RSS feed and Readwise didn't store the full text. Re-save it using the "Save to Readwise Reader" method, then wait for the next sync.
 
-<<<<<<< HEAD
-**Q：執行失敗，顯示 `invalid_grant: Token has been expired or revoked`？**
-OAuth 應用程式還在「測試模式」，測試模式的 refresh token 只有 7 天效期。解決方式：
-1. Google Cloud Console → OAuth 同意畫面 → **Audience** → Publishing Status → **發布應用程式**
-2. 重新執行 `get_token.py` 取得新的 refresh token
-3. 到 GitHub Repo → Settings → Secrets → 更新 `GOOGLE_OAUTH_CREDENTIALS`
+**Q: The workflow failed with `invalid_grant: Token has been expired or revoked`.**
+The OAuth app is still in test mode. Test-mode refresh tokens expire after 7 days. To fix:
+1. Google Cloud Console → OAuth consent screen → **Audience** → Publishing Status → **Publish App**
+2. Re-run `get_token.py` to obtain a new refresh token
+3. Go to GitHub Repo → Settings → Secrets → update `GOOGLE_OAUTH_CREDENTIALS`
 
-**Q：排程時間可以改嗎？**
-可以。在 `.github/workflows/sync.yml` 裡修改 cron 表達式。目前設定 `30 16 * * *` 代表 UTC 16:30，即台灣時間 00:30。
-
----
-
-## 憑證安全注意事項
-
-本專案涉及三個敏感憑證：Readwise API Token、Google OAuth 憑證、Google Drive 資料夾 ID。以下是保護這些憑證的原則：
-
-**✅ 正確做法**
-- 所有憑證只存放在 **GitHub Secrets**，透過 `${{ secrets.xxx }}` 注入執行環境
-- `client_secret_xxx.json` 使用完後可刪除，或確保放在 repo 資料夾**外**
-- `.gitignore` 已封鎖 `client_secret*.json`、`credentials*.json`、`.env` 等檔案，避免誤提交
-
-**❌ 避免的行為**
-- 不要把 Token 或 JSON 內容直接寫入 `sync.py` 或任何程式碼檔案
-- 不要把 Token 或 JSON 貼到聊天室、論壇、GitHub Issue 或 PR 留言
-- 不要把 `client_secret_xxx.json` 放在 repo 資料夾內再執行 `git add .`
-
-**如果憑證不小心外洩**
-- **Readwise Token**：前往 [readwise.io/access_token](https://readwise.io/access_token) 重新產生
-- **Google OAuth 憑證**：前往 Google Cloud Console → 憑證 → 刪除並重新建立 OAuth 用戶端，再執行 `get_token.py` 重新授權
-- 立即到 GitHub Secrets 更新為新的憑證
-
----
-
-## 技術架構
-=======
 **Q: Can I change the schedule?**
 Yes. Edit the cron expression in `.github/workflows/sync.yml`. The current value `30 16 * * *` means UTC 16:30, which is 00:30 Taiwan time (UTC+8).
 
 ---
 
+## Credential Security
+
+This project uses three sensitive credentials: the Readwise API Token, Google OAuth credentials, and the Google Drive folder ID.
+
+**✅ Do**
+- Store all credentials only in **GitHub Secrets**, injected at runtime via `${{ secrets.xxx }}`
+- Delete `client_secret_xxx.json` after use, or keep it outside the repo folder
+- `.gitignore` already blocks `client_secret*.json`, `credentials*.json`, `.env`, etc. to prevent accidental commits
+
+**❌ Don't**
+- Hardcode tokens or JSON content directly in `sync.py` or any source file
+- Paste tokens or JSON into chats, forums, GitHub Issues, or PR comments
+- Place `client_secret_xxx.json` inside the repo folder and then run `git add .`
+
+**If a credential is accidentally exposed**
+- **Readwise Token**: Go to [readwise.io/access_token](https://readwise.io/access_token) and regenerate it
+- **Google OAuth credentials**: Go to Google Cloud Console → Credentials → delete and recreate the OAuth client, then re-run `get_token.py`
+- Update GitHub Secrets immediately with the new credentials
+
+---
+
 ## Technical Stack
->>>>>>> ad3ad36 (docs: split README into English (root) and Traditional Chinese versions)
 
 | Component | Details |
 |-----------|---------|
