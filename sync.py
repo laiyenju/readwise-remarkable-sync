@@ -72,6 +72,7 @@ def fetch_tagged_articles():
         params['pageCursor'] = next_cursor
         time.sleep(API_DELAY)
 
+    time.sleep(API_DELAY)  # 最後一頁結束後也間隔，確保與下一個 API call 有 3s 緩衝
     logger.info(f"Tagged articles: {len(articles)}")
     return articles
 
@@ -81,12 +82,12 @@ def fetch_recent_articles():
     這些 location 的文章 Readwise 已解析完整 HTML，feed 文章則無。"""
     seen = {}
     for location in ('new', 'later'):
-        data = readwise_get({'location': location, 'limit': MAX_INBOX_ARTICLES})
+        data = readwise_get({'location': location, 'limit': MAX_INBOX_ARTICLES // 2})
         for doc in data.get('results', []):
             seen[doc['id']] = doc
         time.sleep(API_DELAY)  # 兩個 location 之間加間隔
 
-    articles = list(seen.values())[:MAX_INBOX_ARTICLES]
+    articles = list(seen.values())  # 各 location 已各限 MAX_INBOX_ARTICLES//2 篇，不需再裁
     logger.info(f"Recent saved articles (new/later, max {MAX_INBOX_ARTICLES}): {len(articles)}")
     return articles
 
@@ -105,7 +106,7 @@ def sanitize_filename(title):
     """將文章標題轉為合法的檔名"""
     name = re.sub(r'[^\w\s\-]', '', title)
     name = re.sub(r'\s+', '_', name.strip())
-    return name[:60] + '.epub'
+    return (name[:60] if name else 'untitled') + '.epub'
 
 
 def fetch_full_html(doc_id):
@@ -150,10 +151,10 @@ def article_to_epub(article):
         source_url = article.get('source_url') or article.get('url') or ''
         html_content = (
             f"<p>{summary}</p><hr/>"
-            f"<p><a href='{source_url}'>前往原始文章閱讀完整內容</a></p>"
+            f'<p><a href="{source_url}">前往原始文章閱讀完整內容</a></p>'
         ) if summary else (
             f"<p>內文無法取得，請至原始來源閱讀：</p>"
-            f"<p><a href='{source_url}'>{source_url}</a></p>"
+            f'<p><a href="{source_url}">{source_url}</a></p>'
         )
 
     # 加上文章標頭資訊
@@ -210,18 +211,28 @@ def get_gdrive_service():
     return build('drive', 'v3', credentials=creds)
 
 
-def delete_old_files(service, folder_id):
-    """刪除資料夾內所有舊文章"""
-    results = service.files().list(
-        q=f"'{folder_id}' in parents and trashed=false",
-        fields='files(id, name)'
-    ).execute()
+def list_drive_files(service, folder_id):
+    """列出資料夾內所有檔案（含分頁，避免 pageSize=100 截斷）"""
+    files = []
+    page_token = None
+    while True:
+        resp = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            fields='nextPageToken, files(id, name)',
+            pageToken=page_token
+        ).execute()
+        files.extend(resp.get('files', []))
+        page_token = resp.get('nextPageToken')
+        if not page_token:
+            break
+    return files
 
-    files = results.get('files', [])
+
+def delete_files(service, files):
+    """刪除指定的 Drive 檔案清單"""
     for f in files:
         service.files().delete(fileId=f['id']).execute()
         logger.info(f"Deleted: {f['name']}")
-
     logger.info(f"Cleaned up {len(files)} old files")
 
 
@@ -252,8 +263,9 @@ def main():
     # 建立 Google Drive 連線
     service = get_gdrive_service()
 
-    # 清除前一天的文章
-    delete_old_files(service, GDRIVE_FOLDER_ID)
+    # 先記錄舊檔案，等新檔案上傳成功後再刪（避免失敗時 Drive 資料夾變空）
+    old_files = list_drive_files(service, GDRIVE_FOLDER_ID)
+    logger.info(f"Found {len(old_files)} existing files to replace after upload")
 
     # 抓取文章
     tagged = fetch_tagged_articles()
@@ -279,6 +291,12 @@ def main():
         # 每篇之間間隔，避免 Readwise API 限速（最後一篇不需要）
         if i < len(articles) - 1:
             time.sleep(API_DELAY)
+
+    # 至少一篇上傳成功才刪舊檔案，確保 Drive 資料夾不會變空
+    if success > 0:
+        delete_files(service, old_files)
+    else:
+        logger.warning("No articles uploaded successfully — keeping existing files intact")
 
     logger.info(f"=== Done: {success}/{len(articles)} articles synced ===")
 
